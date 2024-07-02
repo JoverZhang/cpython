@@ -4,7 +4,6 @@ import operator
 import os
 import posixpath
 import sys
-import warnings
 from glob import _StringGlobber
 from itertools import chain
 from _collections_abc import Sequence
@@ -19,6 +18,7 @@ except ImportError:
     grp = None
 
 from ._abc import UnsupportedOperation, PurePathBase, PathBase
+from ._os import copyfile
 
 
 __all__ = [
@@ -362,6 +362,40 @@ class PurePath(PurePathBase):
         tail[-1] = name
         return self._from_parsed_parts(self.drive, self.root, tail)
 
+    @property
+    def stem(self):
+        """The final path component, minus its last suffix."""
+        name = self.name
+        i = name.rfind('.')
+        if i != -1:
+            stem = name[:i]
+            # Stem must contain at least one non-dot character.
+            if stem.lstrip('.'):
+                return stem
+        return name
+
+    @property
+    def suffix(self):
+        """
+        The final component's last suffix, if any.
+
+        This includes the leading period. For example: '.txt'
+        """
+        name = self.name.lstrip('.')
+        i = name.rfind('.')
+        if i != -1:
+            return name[i:]
+        return ''
+
+    @property
+    def suffixes(self):
+        """
+        A list of the final component's suffixes, if any.
+
+        These include the leading periods. For example: ['.tar', '.gz']
+        """
+        return ['.' + ext for ext in self.name.lstrip('.').split('.')[1:]]
+
     def relative_to(self, other, *, walk_up=False):
         """Return the relative path to another path identified by the passed
         arguments.  If the operation is not possible (because this is not
@@ -405,6 +439,7 @@ class PurePath(PurePathBase):
     def is_reserved(self):
         """Return True if the path contains one of the special names reserved
         by the system, if any."""
+        import warnings
         msg = ("pathlib.PurePath.is_reserved() is deprecated and scheduled "
                "for removal in Python 3.15. Use os.path.isreserved() to "
                "detect reserved paths on Windows.")
@@ -638,7 +673,9 @@ class Path(PathBase, PurePath):
         """Walk the directory tree from this directory, similar to os.walk()."""
         sys.audit("pathlib.Path.walk", self, on_error, follow_symlinks)
         root_dir = str(self)
-        results = self._globber.walk(root_dir, top_down, on_error, follow_symlinks)
+        if not follow_symlinks:
+            follow_symlinks = os._walk_symlinks_as_files
+        results = os.walk(root_dir, top_down, on_error, follow_symlinks)
         for path_str, dirnames, filenames in results:
             if root_dir == '.':
                 path_str = path_str[2:]
@@ -743,6 +780,23 @@ class Path(PathBase, PurePath):
             # could give priority to other errors like EACCES or EROFS
             if not exist_ok or not self.is_dir():
                 raise
+
+    if copyfile:
+        def copy(self, target, follow_symlinks=True):
+            """
+            Copy the contents of this file to the given target. If this file is a
+            symlink and follow_symlinks is false, a symlink will be created at the
+            target.
+            """
+            try:
+                target = os.fspath(target)
+            except TypeError:
+                if isinstance(target, PathBase):
+                    # Target is an instance of PathBase but not os.PathLike.
+                    # Use generic implementation from PathBase.
+                    return PathBase.copy(self, target, follow_symlinks=follow_symlinks)
+                raise
+            copyfile(os.fspath(self), target, follow_symlinks)
 
     def chmod(self, mode, *, follow_symlinks=True):
         """
