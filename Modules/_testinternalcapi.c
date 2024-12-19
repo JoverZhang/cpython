@@ -1989,6 +1989,14 @@ has_inline_values(PyObject *self, PyObject *obj)
     Py_RETURN_FALSE;
 }
 
+static PyObject *
+has_split_table(PyObject *self, PyObject *obj)
+{
+    if (PyDict_Check(obj) && _PyDict_HasSplitTable((PyDictObject *)obj)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
+}
 
 // Circumvents standard version assignment machinery - use with caution and only on
 // short-lived heap types
@@ -2047,6 +2055,15 @@ static PyObject *
 get_tracked_heap_size(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return PyLong_FromInt64(PyInterpreterState_Get()->gc.heap_size);
+}
+
+static PyObject *
+is_static_immortal(PyObject *self, PyObject *op)
+{
+    if (_Py_IsStaticImmortal(op)) {
+        Py_RETURN_TRUE;
+    }
+    Py_RETURN_FALSE;
 }
 
 static PyMethodDef module_functions[] = {
@@ -2130,6 +2147,7 @@ static PyMethodDef module_functions[] = {
     {"get_rare_event_counters", get_rare_event_counters, METH_NOARGS},
     {"reset_rare_event_counters", reset_rare_event_counters, METH_NOARGS},
     {"has_inline_values", has_inline_values, METH_O},
+    {"has_split_table", has_split_table, METH_O},
     {"type_assign_specific_version_unsafe", type_assign_specific_version_unsafe, METH_VARARGS,
      PyDoc_STR("forcefully assign type->tp_version_tag")},
 
@@ -2146,6 +2164,7 @@ static PyMethodDef module_functions[] = {
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
     {"has_deferred_refcount", has_deferred_refcount, METH_O},
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
+    {"is_static_immortal", is_static_immortal, METH_O},
     {NULL, NULL} /* sentinel */
 };
 
